@@ -1,1 +1,1 @@
-# Brain-Entropy-GUI
+# Entropy-Toolbox
