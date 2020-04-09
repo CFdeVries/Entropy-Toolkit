@@ -1,1 +1,1 @@
-# Entropy-Toolbox
+# Entropy-Toolkit
