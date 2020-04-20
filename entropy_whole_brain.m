@@ -15,9 +15,14 @@ Y = Y(:,:,:,Ndiscard+1:end);
 
 X = load([file.path, 'rp_' file.name(2:end-3), 'txt']);    % loading movement regressors
 
-if regressors.ON == 1
-	X_regressors = load(regressors.fullpath);
-	X = [X X_regressors];
+if regressors.add.ON == 1 && regressors.motion.ON == 1
+	X_regressors = load(regressors.add.fullpath);
+	X_motion = load([file.path, 'rp_' file.name(2:end-3), 'txt']);
+	X = [X_motion X_regressors];
+elseif regressors.add.ON == 1
+	X = load(regressors.add.fullpath);
+elseif regressors.motion.ON == 1
+	X = load([file.path, 'rp_' file.name(2:end-3), 'txt']);
 end
 
 X_pinv = pinv(X);

@@ -1,10 +1,17 @@
-function calc_avg_entropy(entropy_maps, atlases)
+function calc_avg_entropy(entropy_maps, atlases, MNI_atlas)
 
-load('ROI_MNI_V4_List.mat')
+if strcmp(MNI_atlas, 'AAL')
+	load('ROI_MNI_V4_List.mat', 'ROI')
+elseif strcmp(MNI_atlas, 'AAL2')
+	load('ROI_MNI_V5_List.mat', 'ROI')
+elseif strcmp(MNI_atlas, 'AAL3')
+	load('ROI_MNI_V6_List.mat', 'ROI')
+end
 
 Nfiles = size(entropy_maps, 2);
+Nregions = length(ROI);
 
-ROI_averages = zeros(Nfiles, 116);
+ROI_averages = zeros(Nfiles, Nregions);
 
 for i = 1:Nfiles
 
@@ -27,7 +34,7 @@ for i = 1:Nfiles
 
     %% calculates average signal for each region
 
-    for m = 1:116
+    for m = 1:Nregions
          entropy2 = Y_entropy;
          entropy2(Y_atlas ~= ROI(m).ID) = [];
          entropy2(isnan(entropy2)) = [];
@@ -39,6 +46,13 @@ end
 
 ROI_averages_cell = num2cell(ROI_averages);
 ROI_averages_cell = [{'file', ROI(:).Nom_L}; entropy_maps' ROI_averages_cell];
-xlswrite('regionwise_entropy.xls', ROI_averages_cell);
+
+outputfile = ['regionwise_entropy_', MNI_atlas, '.xlsx'];
+
+if exist(outputfile, 'file')
+	error('A region-wise output file already exists: %s. Delete or rename it to run this function.', outputfile);
+else
+	xlswrite(outputfile, ROI_averages_cell);
+end
         
 end
