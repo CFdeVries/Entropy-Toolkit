@@ -73,24 +73,24 @@ if butter.ON == 1
 end
 
 %removes movement regressors		% does not have to be done in for loop. What about: beta = X_pinv*Y_temp, and then Y_temp = Y_temp - X*beta?
-for i = 1:length(indices)%idx = indices'
+if regressors.add.ON == 1 || regressors.motion.ON == 1
+	for i = 1:length(indices)%idx = indices'
 
-	data = Y_temp(:, indices(i));
-	
-	if regressors.add.ON == 1 || regressors.motion.ON == 1
+		data = Y_temp(:, indices(i));
+		
 		beta = X_pinv*data;
 		data = data - X*beta;
+		
+		Y_temp(:, indices(i)) = data;
 	end
-	
-	Y_temp(:, indices(i)) = data;
 end
 
 %normalises data
-Y_temp(indices) = (Y_temp(indices) - mean(Y_temp(indices)))./std(Y_temp(indices));
+Y_temp = (Y_temp - mean(Y_temp))./std(Y_temp);
 
 %% calculate and save entropy maps
 
-entropy = zeros(prod(dim(1:3)),1);
+entropy = zeros(prod(dim(1:3)),1);	% 2D entropy map
 entropy_temp = zeros(length(indices),1);
 
 Vout.dim = [x y z];
@@ -104,16 +104,18 @@ N = (N-remainder)./scales;
 
 for scale = scales
 
-	data = Y_temp(:, indices(i));
-
-	if scale ~= 1
-		data = data(1:end-remainder(scale));
-		data = reshape(data, [scale N(scale)]);
-		data = mean(data)';
-	end
-
 	for i = 1:length(indices)
+	
+		data = Y_temp(:, indices(i));
+
+		if scale ~= 1
+			data = data(1:end-remainder(scale));
+			data = reshape(data, [scale N(scale)]);
+			data = mean(data)';
+		end
+
 		entropy_temp(i) = entropy_mex(int32(m), int32(tau), double(r), int32(N(scale)), double(data)); % calculates entropy
+	
 	end
 	
 	entropy(indices) = entropy_temp;
