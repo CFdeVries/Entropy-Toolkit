@@ -66,27 +66,32 @@ mask_temp = reshape(Y_mask,[prod(dim(1:3)),1])';    % reshape 3D mask to 1D
 
 indices = find(mask_temp == 1);
 
+%removes movement regressors		% does not have to be done in for loop. What about: beta = X_pinv*Y_temp, and then Y_temp = Y_temp - X*beta?
+% if regressors.add.ON == 1 || regressors.motion.ON == 1
+
+	% % beta = X_pinv*Y_temp;
+	% % Y_temp = Y_temp - X*beta;
+	
+	% for i = 1:length(Y_temp)%idx = indices'
+
+		% data = Y_temp(:, i);
+		
+		% beta = X_pinv*data;
+		% data = data - X*beta;
+		
+		% Y_temp(:, i) = data;
+	% end
+% end
+
 
 %frequency filters data
 if butter.ON == 1
-	Y_temp(indices) = filter(butter.b, butter.a, Y_temp(indices));
+	Y_temp(:,indices) = filter(butter.b, butter.a, Y_temp(:,indices));
 end
 
-%removes movement regressors		% does not have to be done in for loop. What about: beta = X_pinv*Y_temp, and then Y_temp = Y_temp - X*beta?
-if regressors.add.ON == 1 || regressors.motion.ON == 1
-	for i = 1:length(indices)%idx = indices'
-
-		data = Y_temp(:, indices(i));
-		
-		beta = X_pinv*data;
-		data = data - X*beta;
-		
-		Y_temp(:, indices(i)) = data;
-	end
-end
 
 %normalises data
-Y_temp = (Y_temp - mean(Y_temp))./std(Y_temp);
+Y_temp(:,indices) = (Y_temp(:, indices) - mean(Y_temp(:,indices),1))./std(Y_temp(:,indices),0,1);
 
 %% calculate and save entropy maps
 
