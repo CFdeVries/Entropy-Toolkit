@@ -10,6 +10,7 @@ classdef entropy_toolkit < matlab.apps.AppBase
         SampleentropyButton             matlab.ui.control.RadioButton
         FuzzyapproximateentropyButton   matlab.ui.control.RadioButton
         FuzzysampleentropyButton        matlab.ui.control.RadioButton
+        CustomButton                    matlab.ui.control.RadioButton
         RunButton                       matlab.ui.control.Button
         selectfMRIfilesButton           matlab.ui.control.Button
         ListBox                         matlab.ui.control.ListBox
@@ -37,13 +38,14 @@ classdef entropy_toolkit < matlab.apps.AppBase
         mEditField                      matlab.ui.control.NumericEditField
         tauEditFieldLabel               matlab.ui.control.Label
         tauEditField                    matlab.ui.control.NumericEditField
-        timescalesLabel                 matlab.ui.control.Label
-        timescalesEditField             matlab.ui.control.NumericEditField
         discardfirstvolumesEditFieldLabel_2  matlab.ui.control.Label
         discardfirstEditFieldLabel      matlab.ui.control.Label
         discardfirstEditField           matlab.ui.control.NumericEditField
         maskingthresholdEditFieldLabel  matlab.ui.control.Label
         maskingthresholdEditField       matlab.ui.control.NumericEditField
+        motionregressionCheckBox        matlab.ui.control.CheckBox
+        timescaleEditFieldLabel         matlab.ui.control.Label
+        timescaleEditField              matlab.ui.control.EditField
         entropyparametersLabel          matlab.ui.control.Label
         selectadditionalregressorsButton  matlab.ui.control.Button
         ListBox_4                       matlab.ui.control.ListBox
@@ -55,6 +57,8 @@ classdef entropy_toolkit < matlab.apps.AppBase
         RunButton_2                     matlab.ui.control.Button
         or_seg8matfilesButton           matlab.ui.control.Button
         checkregistrationButton         matlab.ui.control.Button
+        atlasDropDownLabel              matlab.ui.control.Label
+        atlasDropDown                   matlab.ui.control.DropDown
     end
 
 
@@ -95,11 +99,14 @@ classdef entropy_toolkit < matlab.apps.AppBase
 
         % Button pushed function: RunButton
         function RunButtonPushed(app, event)
+        
+            tic
+            
             r = app.rvalueEditField.Value;
             m = app.mEditField.Value;
             tau = app.tauEditField.Value;
             Ndiscard = app.discardfirstEditField.Value;
-            Nscales = app.timescalesEditField.Value;
+            scales = str2double(strsplit(app.timescaleEditField.Value, {',', ' '}));
             TH = app.maskingthresholdEditField.Value;
             
             filter.RT = app.samplingintervalsEditField.Value;
@@ -133,6 +140,8 @@ classdef entropy_toolkit < matlab.apps.AppBase
                 algorithm = 'fApEn';
             elseif app.FuzzysampleentropyButton.Value == true
                 algorithm = 'fSampEn';
+            elseif app.CustomButton.Value == true
+                algorithm = 'custom';
             end
             
             
@@ -143,8 +152,9 @@ classdef entropy_toolkit < matlab.apps.AppBase
             fMRI.path = app.fMRI.path;
             Nfiles = size(app.fMRI.name, 1);
             
-            regressors.ON = app.regressors.ON;
-            
+            regressors.motion.ON = app.motionregressionCheckBox.Value;
+            regressors.add.ON = app.regressors.ON;
+
             if app.regressors.ON == 1
                 Nregressors = size(app.regressors.name, 1);
                 if Nfiles ~= Nregressors
@@ -158,13 +168,18 @@ classdef entropy_toolkit < matlab.apps.AppBase
                 d.Message = ['Calculating entropy for ', fMRI.name];
                 
                 if app.regressors.ON == 1
-                    regressors.fullpath = app.regressors.fullpath(i, :);
+                    regressors.add.fullpath = app.regressors.fullpath(i, :);
                 end
                 
-                entropy_whole_brain(m, tau, r, fMRI, filter, regressors, Nscales, algorithm, Ndiscard, TH);
+                entropy_whole_brain(m, tau, r, fMRI, filter, regressors, scales, algorithm, Ndiscard, TH);
                 
-                % carry on working on additional regressors!!
                 d.Value = d.Value + 1/Nfiles;
+            end
+            
+            toc
+            
+            if regressors.motion.ON
+                calc_motion(app.fMRI);
             end
 
         end
@@ -247,16 +262,32 @@ classdef entropy_toolkit < matlab.apps.AppBase
 
         % Button pushed function: RunButton_2
         function RunButton_2Pushed(app, event)
+        
+            Nentropy = size(app.entropy.name, 1);
+        
             if ~isempty(app.seg8)
+                Nseg8 = size(app.seg8.name, 1);
+                
+                if Nentropy ~= Nseg8
+                    error('Number of entropy files is not equal to the number of *_seg8.mat files');
+                end
+                
                 app.iy.fullpath = generate_iy_files(app.seg8);
             end
                 
             if ~isempty(app.iy) && ~isempty(app.entropy)
-                app.atlas.fullpath = atlas_to_native_space(app.entropy, app.iy.fullpath);
+                Niy = size(app.iy.name, 1);
+                
+                if Nentropy ~= Niy
+                    error('Number of entropy files is not equal to the number of iy_*.nii files');
+                end
+                                
+                MNI_atlas = app.atlasDropDown.Value;
+                app.atlas.fullpath = atlas_to_native_space(app.entropy, app.iy.fullpath, MNI_atlas);
             end
             
             if ~isempty(app.entropy) && ~isempty(app.atlas)
-                calc_avg_entropy(app.entropy.fullpath, app.atlas.fullpath);
+                calc_avg_entropy(app.entropy.fullpath, app.atlas.fullpath, MNI_atlas);
             end            
         end
 
@@ -325,14 +356,14 @@ classdef entropy_toolkit < matlab.apps.AppBase
             app.ButtonGroup.FontName = 'Arial';
             app.ButtonGroup.FontWeight = 'bold';
             app.ButtonGroup.FontSize = 14;
-            app.ButtonGroup.Position = [40 388 211 132];
+            app.ButtonGroup.Position = [40 372 211 148];
 
             % Create ApproximateentropyButton
             app.ApproximateentropyButton = uiradiobutton(app.ButtonGroup);
             app.ApproximateentropyButton.Text = 'Approximate entropy';
             app.ApproximateentropyButton.FontName = 'Arial';
             app.ApproximateentropyButton.FontSize = 14;
-            app.ApproximateentropyButton.Position = [11 99 151 22];
+            app.ApproximateentropyButton.Position = [11 115 151 22];
             app.ApproximateentropyButton.Value = true;
 
             % Create SampleentropyButton
@@ -340,28 +371,36 @@ classdef entropy_toolkit < matlab.apps.AppBase
             app.SampleentropyButton.Text = 'Sample entropy';
             app.SampleentropyButton.FontName = 'Arial';
             app.SampleentropyButton.FontSize = 14;
-            app.SampleentropyButton.Position = [11 72 120 22];
+            app.SampleentropyButton.Position = [11 88 120 22];
 
             % Create FuzzyapproximateentropyButton
             app.FuzzyapproximateentropyButton = uiradiobutton(app.ButtonGroup);
             app.FuzzyapproximateentropyButton.Text = 'Fuzzy approximate entropy';
             app.FuzzyapproximateentropyButton.FontName = 'Arial';
             app.FuzzyapproximateentropyButton.FontSize = 14;
-            app.FuzzyapproximateentropyButton.Position = [11 46 192 22];
+            app.FuzzyapproximateentropyButton.Position = [11 62 192 22];
 
             % Create FuzzysampleentropyButton
             app.FuzzysampleentropyButton = uiradiobutton(app.ButtonGroup);
             app.FuzzysampleentropyButton.Text = 'Fuzzy sample entropy';
             app.FuzzysampleentropyButton.FontName = 'Arial';
             app.FuzzysampleentropyButton.FontSize = 14;
-            app.FuzzysampleentropyButton.Position = [11 18 159 22];
+            app.FuzzysampleentropyButton.Position = [11 34 159 22];
+
+            % Create CustomButton
+            app.CustomButton = uiradiobutton(app.ButtonGroup);
+            app.CustomButton.Text = 'Custom';
+            app.CustomButton.FontName = 'Arial';
+            app.CustomButton.FontSize = 14;
+            app.CustomButton.FontColor = [0.7686 0.0784 0.5059];
+            app.CustomButton.Position = [11 8 70 22];
 
             % Create RunButton
             app.RunButton = uibutton(app.voxelbyvoxelentropyTab, 'push');
             app.RunButton.ButtonPushedFcn = createCallbackFcn(app, @RunButtonPushed, true);
             app.RunButton.BackgroundColor = [0.8863 0.8941 0.9647];
             app.RunButton.FontSize = 14;
-            app.RunButton.Position = [84 37 100 24];
+            app.RunButton.Position = [84 19 100 24];
             app.RunButton.Text = 'Run';
 
             % Create selectfMRIfilesButton
@@ -493,27 +532,27 @@ classdef entropy_toolkit < matlab.apps.AppBase
             % Create Panel
             app.Panel = uipanel(app.voxelbyvoxelentropyTab);
             app.Panel.BackgroundColor = [0.8902 0.8902 0.9608];
-            app.Panel.Position = [40 113 211 231];
+            app.Panel.Position = [40 67 211 269];
 
             % Create rvalueEditFieldLabel
             app.rvalueEditFieldLabel = uilabel(app.Panel);
             app.rvalueEditFieldLabel.HorizontalAlignment = 'right';
             app.rvalueEditFieldLabel.FontSize = 14;
-            app.rvalueEditFieldLabel.Position = [44 195 48 22];
+            app.rvalueEditFieldLabel.Position = [44 233 48 22];
             app.rvalueEditFieldLabel.Text = 'r-value';
 
             % Create rvalueEditField
             app.rvalueEditField = uieditfield(app.Panel, 'numeric');
             app.rvalueEditField.Limits = [0 Inf];
             app.rvalueEditField.FontSize = 14;
-            app.rvalueEditField.Position = [119 195 51 22];
+            app.rvalueEditField.Position = [119 233 51 22];
             app.rvalueEditField.Value = 0.25;
 
             % Create mEditFieldLabel
             app.mEditFieldLabel = uilabel(app.Panel);
             app.mEditFieldLabel.HorizontalAlignment = 'center';
             app.mEditFieldLabel.FontSize = 14;
-            app.mEditFieldLabel.Position = [50 167 42 22];
+            app.mEditFieldLabel.Position = [50 205 42 22];
             app.mEditFieldLabel.Text = 'm';
 
             % Create mEditField
@@ -521,77 +560,82 @@ classdef entropy_toolkit < matlab.apps.AppBase
             app.mEditField.Limits = [1 Inf];
             app.mEditField.ValueDisplayFormat = '%.0f';
             app.mEditField.FontSize = 14;
-            app.mEditField.Position = [119 167 51 22];
+            app.mEditField.Position = [119 205 51 22];
             app.mEditField.Value = 2;
 
             % Create tauEditFieldLabel
             app.tauEditFieldLabel = uilabel(app.Panel);
             app.tauEditFieldLabel.HorizontalAlignment = 'center';
             app.tauEditFieldLabel.FontSize = 14;
-            app.tauEditFieldLabel.Position = [50 138 42 22];
+            app.tauEditFieldLabel.Position = [50 176 42 22];
             app.tauEditFieldLabel.Text = 'tau';
 
             % Create tauEditField
             app.tauEditField = uieditfield(app.Panel, 'numeric');
             app.tauEditField.ValueDisplayFormat = '%.0f';
             app.tauEditField.FontSize = 14;
-            app.tauEditField.Position = [119 138 51 22];
+            app.tauEditField.Position = [119 176 51 22];
             app.tauEditField.Value = 1;
-
-            % Create timescalesLabel
-            app.timescalesLabel = uilabel(app.Panel);
-            app.timescalesLabel.HorizontalAlignment = 'center';
-            app.timescalesLabel.FontSize = 14;
-            app.timescalesLabel.Position = [33 106 76 22];
-            app.timescalesLabel.Text = 'time scales';
-
-            % Create timescalesEditField
-            app.timescalesEditField = uieditfield(app.Panel, 'numeric');
-            app.timescalesEditField.Limits = [1 Inf];
-            app.timescalesEditField.ValueDisplayFormat = '%.0f';
-            app.timescalesEditField.FontSize = 14;
-            app.timescalesEditField.Position = [119 106 51 22];
-            app.timescalesEditField.Value = 1;
 
             % Create discardfirstvolumesEditFieldLabel_2
             app.discardfirstvolumesEditFieldLabel_2 = uilabel(app.Panel);
             app.discardfirstvolumesEditFieldLabel_2.HorizontalAlignment = 'right';
             app.discardfirstvolumesEditFieldLabel_2.FontSize = 14;
-            app.discardfirstvolumesEditFieldLabel_2.Position = [138 55 58 22];
+            app.discardfirstvolumesEditFieldLabel_2.Position = [138 93 58 22];
             app.discardfirstvolumesEditFieldLabel_2.Text = 'volumes';
 
             % Create discardfirstEditFieldLabel
             app.discardfirstEditFieldLabel = uilabel(app.Panel);
             app.discardfirstEditFieldLabel.HorizontalAlignment = 'right';
             app.discardfirstEditFieldLabel.FontSize = 14;
-            app.discardfirstEditFieldLabel.Position = [19 55 77 22];
+            app.discardfirstEditFieldLabel.Position = [19 93 77 22];
             app.discardfirstEditFieldLabel.Text = 'discard first';
 
             % Create discardfirstEditField
             app.discardfirstEditField = uieditfield(app.Panel, 'numeric');
             app.discardfirstEditField.FontSize = 14;
-            app.discardfirstEditField.Position = [105 55 33 22];
+            app.discardfirstEditField.Position = [105 93 33 22];
             app.discardfirstEditField.Value = 5;
 
             % Create maskingthresholdEditFieldLabel
             app.maskingthresholdEditFieldLabel = uilabel(app.Panel);
             app.maskingthresholdEditFieldLabel.HorizontalAlignment = 'right';
             app.maskingthresholdEditFieldLabel.FontSize = 14;
-            app.maskingthresholdEditFieldLabel.Position = [18 16 119 22];
+            app.maskingthresholdEditFieldLabel.Position = [18 54 119 22];
             app.maskingthresholdEditFieldLabel.Text = 'masking threshold';
 
             % Create maskingthresholdEditField
             app.maskingthresholdEditField = uieditfield(app.Panel, 'numeric');
             app.maskingthresholdEditField.Limits = [0 Inf];
             app.maskingthresholdEditField.FontSize = 14;
-            app.maskingthresholdEditField.Position = [151 16 45 22];
+            app.maskingthresholdEditField.Position = [151 54 45 22];
             app.maskingthresholdEditField.Value = 0.8;
+
+            % Create motionregressionCheckBox
+            app.motionregressionCheckBox = uicheckbox(app.Panel);
+            app.motionregressionCheckBox.Text = 'motion regression';
+            app.motionregressionCheckBox.FontSize = 14;
+            app.motionregressionCheckBox.Position = [41 14 133 22];
+            app.motionregressionCheckBox.Value = true;
+
+            % Create timescaleEditFieldLabel
+            app.timescaleEditFieldLabel = uilabel(app.Panel);
+            app.timescaleEditFieldLabel.HorizontalAlignment = 'center';
+            app.timescaleEditFieldLabel.FontSize = 14;
+            app.timescaleEditFieldLabel.Position = [36.5 144 69 22];
+            app.timescaleEditFieldLabel.Text = 'time scale';
+
+            % Create timescaleEditField
+            app.timescaleEditField = uieditfield(app.Panel, 'text');
+            app.timescaleEditField.HorizontalAlignment = 'right';
+            app.timescaleEditField.Position = [118 144 51 22];
+            app.timescaleEditField.Value = '1';
 
             % Create entropyparametersLabel
             app.entropyparametersLabel = uilabel(app.voxelbyvoxelentropyTab);
             app.entropyparametersLabel.FontSize = 14;
             app.entropyparametersLabel.FontWeight = 'bold';
-            app.entropyparametersLabel.Position = [78 346 136 22];
+            app.entropyparametersLabel.Position = [78 338 136 22];
             app.entropyparametersLabel.Text = 'entropy parameters';
 
             % Create selectadditionalregressorsButton
@@ -622,7 +666,7 @@ classdef entropy_toolkit < matlab.apps.AppBase
             % Create selectentropyfilesButton
             app.selectentropyfilesButton = uibutton(app.regionwiseentropyTab, 'push');
             app.selectentropyfilesButton.ButtonPushedFcn = createCallbackFcn(app, @selectentropyfilesButtonPushed, true);
-            app.selectentropyfilesButton.BackgroundColor = [0.8863 0.8941 0.9647];
+            app.selectentropyfilesButton.BackgroundColor = [0.8902 0.8902 0.9608];
             app.selectentropyfilesButton.FontName = 'Arial';
             app.selectentropyfilesButton.FontSize = 14;
             app.selectentropyfilesButton.Position = [161 497 141 28];
@@ -667,6 +711,21 @@ classdef entropy_toolkit < matlab.apps.AppBase
             app.checkregistrationButton.FontSize = 14;
             app.checkregistrationButton.Position = [572 61 130 24];
             app.checkregistrationButton.Text = 'check registration';
+
+            % Create atlasDropDownLabel
+            app.atlasDropDownLabel = uilabel(app.regionwiseentropyTab);
+            app.atlasDropDownLabel.HorizontalAlignment = 'right';
+            app.atlasDropDownLabel.FontSize = 14;
+            app.atlasDropDownLabel.Position = [516 497 35 22];
+            app.atlasDropDownLabel.Text = 'atlas';
+
+            % Create atlasDropDown
+            app.atlasDropDown = uidropdown(app.regionwiseentropyTab);
+            app.atlasDropDown.Items = {'AAL', 'AAL2', 'AAL3'};
+            app.atlasDropDown.FontSize = 14;
+            app.atlasDropDown.BackgroundColor = [0.8902 0.8902 0.9608];
+            app.atlasDropDown.Position = [566 497 100 22];
+            app.atlasDropDown.Value = 'AAL';
 
             % Show the figure after all components are created
             app.UIFigure.Visible = 'on';

@@ -67,21 +67,10 @@ mask_temp = reshape(Y_mask,[prod(dim(1:3)),1])';    % reshape 3D mask to 1D
 indices = find(mask_temp == 1);
 
 %removes movement regressors		% does not have to be done in for loop. What about: beta = X_pinv*Y_temp, and then Y_temp = Y_temp - X*beta?
-% if regressors.add.ON == 1 || regressors.motion.ON == 1
-
-	% % beta = X_pinv*Y_temp;
-	% % Y_temp = Y_temp - X*beta;
-	
-	% for i = 1:length(Y_temp)%idx = indices'
-
-		% data = Y_temp(:, i);
-		
-		% beta = X_pinv*data;
-		% data = data - X*beta;
-		
-		% Y_temp(:, i) = data;
-	% end
-% end
+if regressors.add.ON == 1 || regressors.motion.ON == 1
+	beta = X_pinv*Y_temp;
+	Y_temp(:,indices) = Y_temp(:,indices) - X*beta(:,indices);
+end
 
 
 %frequency filters data
@@ -107,19 +96,21 @@ Vout.n = [1,1];
 remainder = mod(N, scales);
 N = (N-remainder)./scales;
 
-for scale = scales
+for j = 1:length(scales)
+
+	scale = scales(j);
 
 	for i = 1:length(indices)
 	
 		data = Y_temp(:, indices(i));
 
 		if scale ~= 1
-			data = data(1:end-remainder(scale));
-			data = reshape(data, [scale N(scale)]);
+			data = data(1:end-remainder(j));
+			data = reshape(data, [scale N(j)]);
 			data = mean(data)';
 		end
 
-		entropy_temp(i) = entropy_mex(int32(m), int32(tau), double(r), int32(N(scale)), double(data)); % calculates entropy
+		entropy_temp(i) = entropy_mex(int32(m), int32(tau), double(r), int32(N(j)), double(data)); % calculates entropy
 	
 	end
 	
